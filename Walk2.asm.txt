@@ -1,0 +1,197 @@
+Comment !
+Program:   Walk2.asm
+ Student:     Bryan Oliande
+ Date Due:        4/23/15
+ Class:       CSCI 241
+ Instructor:  Mr. Ding
+Description: Expansion of textbook walk.asm program
+!
+
+
+INCLUDE Irvine32.inc
+StartX = 39
+StartY = 10
+WalkMax = 50
+
+DrunkardWalk STRUCT
+	path COORD WalkMax DUP(<0,0>)
+	pathsUsed WORD 0
+DrunkardWalk ENDS
+
+DisplayPosition2 PROTO currX:WORD, currY:WORD
+
+
+.data
+aWalk DrunkardWalk <>
+prompt BYTE "How many steps the drunkard should move: ",0
+promptBad BYTE "Invalid input, please enter again",0
+
+.code
+main PROC
+	;prompt for input
+	mov  edx,OFFSET prompt
+    call WriteString
+	
+	;check if input valid and store in eax
+	read:  call ReadInt
+       jno  goodInput
+
+       mov  edx,OFFSET promptBad
+       call WriteString
+	   call crlf
+       jmp  read        ;go input again
+
+	goodInput:
+    ;good value now in eax
+
+	mov	esi,OFFSET aWalk
+	mov (DrunkardWalk PTR [esi]).pathsUsed,ax
+
+	call	TakeDrunkenWalk2
+	call crlf
+
+	mov esi,OFFSET aWalk
+	call ShowPath	
+
+	call crlf
+	call WaitMsg	;"Press any key...
+	exit
+main ENDP
+
+;-------------------------------------------------------
+TakeDrunkenWalk2 PROC
+	LOCAL currX:WORD, currY:WORD
+;
+; Take a walk in random directions (north, south, east,
+; west).
+; Receives: ESI points to a DrunkardWalk structure
+; Returns:  the structure is initialized with random values
+;-------------------------------------------------------
+	pushad
+
+; Use the OFFSET operator to obtain the address of
+; path, the array of COORD objects, and copy it to EDI.
+	mov	edi,esi
+	add	edi,OFFSET DrunkardWalk.path
+	movzx	ecx,(DrunkardWalk PTR [esi]).pathsUsed		; loop counter
+	mov	currX,StartX		; current X-location
+	mov	currY,StartY		; current Y-location
+	
+Again:
+	; Insert current location in array.
+	mov	ax,currX
+	mov	(COORD PTR [edi]).X,ax
+	mov	ax,currY
+	mov	(COORD PTR [edi]).Y,ax
+
+	
+	
+	INVOKE DisplayPosition2, currX, currY
+
+	GetRange:
+	mov	  eax,4			; choose a direction (0-3)
+	call  RandomRange
+
+	.IF eax == 0		; North
+	  dec currY
+	.ELSEIF eax == 1	; South
+	  inc currY
+	.ELSEIF eax == 2	; West
+	  dec currX
+	.ELSE			; East (EAX = 3)
+	  inc currX
+	.ENDIF
+
+	;check if it hits the same starting position
+	cmp CurrX,StartX	;currX = startX?
+	jne Next			;no, continue on
+	cmp CurrY,StartY	;yes, check if CurrY = startY
+	jne Next			;no, not at start position, continue
+
+			;undo currX  or startY so we don't get diagonal'
+	.IF eax == 0		; North
+	  inc currY
+	.ELSEIF eax == 1	; South
+	  dec currY
+	.ELSEIF eax == 2	; West
+	  inc currX
+	.ELSE			; East (EAX = 3)
+	  dec currX
+	.ENDIF
+	jmp GetRange		;yes, we must get a new position 
+
+	Next:
+	add	edi,TYPE COORD		; point to next COORD
+	
+	;couldn't use loop, caused error
+	dec ecx ;LOOP AGAIN
+	jnz Again	;LOOP AGAIN
+
+Finish:
+	popad
+	ret
+TakeDrunkenWalk2 ENDP
+
+;-------------------------------------------------------
+DisplayPosition2 PROC currX:WORD, currY:WORD
+; Display the current X and Y positions.
+;-------------------------------------------------------
+.data
+commaStr BYTE ",",0
+openParenStr BYTE "(",0
+closedParenStr BYTE ") ",0
+.code
+	pushad
+	mov	 edx,OFFSET openParenStr	; "(" string
+	call	 WriteString
+	movzx eax,currX			; current X position
+	call	 WriteDec
+	mov	 edx,OFFSET commaStr	; "," string
+	call	 WriteString
+	movzx eax,currY			; current Y position
+	call	 WriteDec
+	mov	 edx,OFFSET closedParenStr	; ") " string
+	call	 WriteString
+	popad
+	ret
+DisplayPosition2 ENDP
+
+;-------------------------------------------------------------------------
+ShowPath PROC
+;	goes through a Path array and outputs a character at each position
+;	RECEIVES esi = OFFSET aWalk
+;--------------------------------------------------------------------------
+
+	INVOKE GetStdHandle, STD_OUTPUT_HANDLE
+	mov ebx,eax		;EBX acts as consoleHandle
+
+	;INVOKE SetConsoleCursorPosition, consoleHandle, XYPos
+	INVOKE SetConsoleCursorPosition, ebx, (COORD PTR [esi])
+
+	;starting position
+	mov  al,'O'
+    call WriteChar
+
+	
+	mov ecx,0
+	mov cx,(DrunkardWalk PTR [esi]).pathsUsed
+	
+	sub ecx,1		;already outputted 1 path
+
+	add esi,TYPE COORD	;point to next position
+	
+	L1:
+	mov  eax,1000 ;delay 1 sec
+    call Delay
+	push ecx
+	INVOKE SetConsoleCursorPosition, ebx, (COORD PTR [esi])
+	pop ecx
+	mov  al,'*'
+	call WriteChar
+	add esi,TYPE COORD	;point to next position
+
+	loop L1
+
+	ret
+ShowPath ENDP
+END main
